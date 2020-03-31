@@ -113,3 +113,53 @@ void main(void) {
         outColor = vec3(0.0);
     }
 }`;
+
+export const sphereTraceFsSource =
+    `#version 300 es
+precision mediump float;
+precision mediump sampler3D;
+uniform float uProgress;
+uniform vec3 uRayBaseValue, uRayYContrib, uRayXContrib, uRayOrg;
+uniform sampler3D textureData;
+
+out vec3 outColor;
+
+float gridPattern(vec3 world) {
+    float x = floor(world.x) - floor(world.x + fwidth(world.x) * 2.0);
+    float y = floor(world.y) - floor(world.y + fwidth(world.y) * 2.0);
+    float z = floor(world.z) - floor(world.z + fwidth(world.z) * 2.0);
+
+    if (x != 0.0 || y != 0.0 || z != 0.0) {
+        return 1.0;
+    } else {
+        return 0.0;
+    }
+}
+
+void main(void) {
+    const float maxAttempts = 16.0;
+
+    vec3 ray = uRayBaseValue + uRayXContrib * gl_FragCoord.x + uRayYContrib * gl_FragCoord.y;
+    ray = normalize(ray);
+
+    vec3 o = uRayOrg;
+
+    float tries = maxAttempts;
+
+    float d;
+    do {
+        d = texture(textureData, o).x - 0.4;
+        o += ray * d;
+        tries -= 1.0;
+    }
+    while (d > 1e-4 && tries > 0.0);
+    
+    if (d <= 1e-4) {
+        const vec3 sky = vec3(0.53, 0.81, 0.92);
+        outColor = (tries / maxAttempts) * sky;
+
+        // outColor = vec3(gridPattern(o));
+    } else {
+        outColor = vec3(0.0);
+    }
+}`;

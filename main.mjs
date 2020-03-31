@@ -1,4 +1,5 @@
 import { vsSource, rayTracerFsSource } from "./shaders.mjs";
+import { sphereTraceFsSource } from "./shaders.mjs";
 
 const debugOutput = document.getElementById("debug");
 
@@ -14,7 +15,7 @@ gl.disable(gl.DEPTH_TEST);
 
 const model = initFullscreenRect(gl);
 
-const shaderProgram = initShaderProgram(gl, vsSource, rayTracerFsSource);
+const shaderProgram = initShaderProgram(gl, vsSource, sphereTraceFsSource);
 
 const aPosition = gl.getAttribLocation(shaderProgram, 'aPosition');
 const uProgress = gl.getUniformLocation(shaderProgram, 'uProgress');
@@ -29,11 +30,51 @@ gl.enableVertexAttribArray(aPosition);
 gl.bindBuffer(gl.ARRAY_BUFFER, model.buffer);
 gl.vertexAttribPointer(aPosition, 2, gl.BYTE, true, 2, 0);
 
+var texture = gl.createTexture();
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_3D, texture);
+gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_BASE_LEVEL, 0);
+gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAX_LEVEL, 0);
+gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.MIRRORED_REPEAT);
+gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+
+var SIZE = 128;
+var data = new Uint8Array(SIZE * SIZE * SIZE);
+
+for (let z = 0; z < SIZE; ++z) {
+    for (let y = 0; y < SIZE; ++y) {
+        for (let x = 0; x < SIZE; ++x) {
+            const index = (z << 14) | (y << 7) | x;
+            const dx = x - SIZE / 2;
+            const dy = y - SIZE / 2;
+            const dz = z - SIZE / 2;
+            const dist = Math.hypot(dx, dy, dz);
+            data[index] = dist * 2;
+        }
+    }
+}
+
+gl.texImage3D(
+    gl.TEXTURE_3D,  // target
+    0,              // level
+    gl.R8,          // internalformat
+    SIZE,           // width
+    SIZE,           // height
+    SIZE,           // depth
+    0,              // border
+    gl.RED,         // format
+    gl.UNSIGNED_BYTE, // type
+    data            // pixel
+);
+
 
 let anyMovementKeyPressed = false;
 const playerForward = [1, 0, 0];
 const playerRight = [0, 0, 1];
-let playerPos = [0, 30, 0];
+let playerPos = [0, 1, 0];
 let hAngle = 0.0;
 let vAngle = 0.0;
 let aspectRatio = 1.0;
@@ -96,9 +137,9 @@ function drawScene(timestamp) {
     updateGameLogic(timestamp - previousFrame);
 
     if (!anyMovementKeyPressed) {
-        const progress = timestamp / 1000;
+        const progress = timestamp / 8000;
         playerPos[0] = progress;
-        playerPos[2] = Math.cos(progress) * progress / 4;
+        playerPos[2] = Math.cos(progress);
         updateCameraPosition(playerPos);
     }
 
@@ -115,7 +156,7 @@ function drawScene(timestamp) {
 
 function updateGameLogic(delta) {
     const camTurnSpeed = delta / (1000 / 60) * Math.PI / 64;
-    const camTravelSpeed = delta / (1000 / 60) * 1.0 / 4;
+    const camTravelSpeed = delta / (1000 / 60) * 1e-2;
 
     if (keysDown.ArrowUp) {
         updateCameraAngle(hAngle, vAngle + camTurnSpeed);
