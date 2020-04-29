@@ -6,7 +6,7 @@ void main(void) {
 }`;
 
 // const carpetFsSource =
-//     `precision mediump float;
+//     `precision highp float;
 // uniform float uProgress;
 // void main(void) {
 //     vec2 v = floor(gl_FragCoord.xy * uProgress);
@@ -26,7 +26,7 @@ void main(void) {
 
 export const rayTracerFsSource =
     `#version 300 es
-precision mediump float;
+precision highp float;
 uniform float uProgress;
 uniform vec3 uRayBaseValue, uRayYContrib, uRayXContrib, uRayOrg;
 
@@ -116,7 +116,7 @@ void main(void) {
 
 export const sphereTraceFsSource =
     `#version 300 es
-precision mediump float;
+precision highp float;
 precision mediump sampler3D;
 uniform float uProgress;
 uniform vec3 uRayBaseValue, uRayYContrib, uRayXContrib, uRayOrg;

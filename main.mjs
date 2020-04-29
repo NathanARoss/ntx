@@ -1,5 +1,4 @@
-import { vsSource, rayTracerFsSource } from "./shaders.mjs";
-import { sphereTraceFsSource } from "./shaders.mjs";
+import { vsSource, rayTracerFsSource, sphereTraceFsSource } from "./shaders.mjs";
 
 const debugOutput = document.getElementById("debug");
 
