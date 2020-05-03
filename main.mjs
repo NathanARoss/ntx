@@ -1,4 +1,4 @@
-import { vsSource, rayTracerFsSource, sphereTraceFsSource } from "./shaders.mjs";
+import { vsSource, getRayTracer } from "./shaders.mjs";
 
 const debugOutput = document.getElementById("debug");
 
@@ -14,7 +14,8 @@ gl.disable(gl.DEPTH_TEST);
 
 const model = initFullscreenRect(gl);
 
-const shaderProgram = initShaderProgram(gl, vsSource, sphereTraceFsSource);
+const [fsSource, scene] = getRayTracer(gl, 1);
+const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
 
 const aPosition = gl.getAttribLocation(shaderProgram, 'aPosition');
 const uProgress = gl.getUniformLocation(shaderProgram, 'uProgress');
@@ -29,45 +30,31 @@ gl.enableVertexAttribArray(aPosition);
 gl.bindBuffer(gl.ARRAY_BUFFER, model.buffer);
 gl.vertexAttribPointer(aPosition, 2, gl.BYTE, true, 2, 0);
 
-var texture = gl.createTexture();
-gl.activeTexture(gl.TEXTURE0);
-gl.bindTexture(gl.TEXTURE_3D, texture);
-gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_BASE_LEVEL, 0);
-gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAX_LEVEL, 0);
-gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.MIRRORED_REPEAT);
-gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
-gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
-
-var SIZE = 128;
-var data = new Uint8Array(SIZE * SIZE * SIZE);
-
-for (let z = 0; z < SIZE; ++z) {
-    for (let y = 0; y < SIZE; ++y) {
-        for (let x = 0; x < SIZE; ++x) {
-            const index = (z << 14) | (y << 7) | x;
-            const dx = x - SIZE / 2;
-            const dy = y - SIZE / 2;
-            const dz = z - SIZE / 2;
-            const dist = Math.hypot(dx, dy, dz);
-            data[index] = dist * 2;
-        }
-    }
+if (scene) {
+    var texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_3D, texture);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_BASE_LEVEL, 0);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAX_LEVEL, 0);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, scene.R);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, scene.S);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, scene.T);
+    
+    gl.texImage3D(
+        gl.TEXTURE_3D,  // target
+        0,              // level
+        gl.R8,          // internalformat
+        scene.width,    // width
+        scene.height,   // height
+        scene.depth,    // depth
+        0,              // border
+        gl.RED,         // format
+        gl.UNSIGNED_BYTE, // type
+        scene.data      // pixel
+    );
 }
-
-gl.texImage3D(
-    gl.TEXTURE_3D,  // target
-    0,              // level
-    gl.R8,          // internalformat
-    SIZE,           // width
-    SIZE,           // height
-    SIZE,           // depth
-    0,              // border
-    gl.RED,         // format
-    gl.UNSIGNED_BYTE, // type
-    data            // pixel
-);
 
 
 let anyMovementKeyPressed = false;

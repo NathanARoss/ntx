@@ -33,9 +33,11 @@ uniform vec3 uRayBaseValue, uRayYContrib, uRayXContrib, uRayOrg;
 out vec3 outColor;
 
 float gridPattern(vec3 world) {
-    float x = floor(world.x) - floor(world.x + fwidth(world.x) * 2.0);
-    float y = floor(world.y) - floor(world.y + fwidth(world.y) * 2.0);
-    float z = floor(world.z) - floor(world.z + fwidth(world.z) * 2.0);
+    world *= 10.0;
+    
+    float x = floor(world.x) - floor(world.x + fwidth(world.x));
+    float y = floor(world.y) - floor(world.y + fwidth(world.y));
+    float z = floor(world.z) - floor(world.z + fwidth(world.z));
 
     if (x != 0.0 || y != 0.0 || z != 0.0) {
         return 1.0;
@@ -54,11 +56,11 @@ float box(vec3 p, vec3 b) {
 }
 
 float gridCityDistance(vec3 p) {
-    float ground = p.y + 0.5;
-    vec2 boxSpace = mod(p.xz + vec2(0.0, 8.0), 16.0) - 8.0;
-    float a = box(vec3(boxSpace.x, p.y - 10.0, boxSpace.y), vec3(1.4, 10.0, 1.4));
-    vec2 sphereSpace = mod(p.xz + vec2(8.0, 0.0), 16.0) - 8.0;
-    float b = sphere(vec3(sphereSpace.x, p.y - 1.0, sphereSpace.y), 1.0);
+    float ground = p.y;
+    vec2 boxSpace = mod(p.xz + vec2(0.0, 0.8), 1.6) - 0.8;
+    float a = box(vec3(boxSpace.x, p.y - 0.5, boxSpace.y), vec3(0.14, 0.5, 0.14));
+    vec2 sphereSpace = mod(p.xz + vec2(0.8, 0.0), 1.6) - 0.8;
+    float b = sphere(vec3(sphereSpace.x, p.y - 0.1, sphereSpace.y), 0.1);
     return min(ground, min(a, b));
 }
 
@@ -72,7 +74,8 @@ float floorDistance(vec3 p) {
 
 void main(void) {
     const float maxAttempts = 8.0;
-    const float worldCeiling = 20.0;
+    const float worldCeiling = 1.0;
+    const float epsilon = 1e-3;
 
     vec3 ray = uRayBaseValue + uRayXContrib * gl_FragCoord.x + uRayYContrib * gl_FragCoord.y;
     ray = normalize(ray);
@@ -83,7 +86,7 @@ void main(void) {
 
         if (uRayOrg.y >= worldCeiling) {
             float d = (worldCeiling - uRayOrg.y) / ray.y;
-            r.xz = uRayOrg.xz + (ray.xz * d);
+            r.xz = uRayOrg.xz + ray.xz * d;
             r.y = worldCeiling;
         } else {
             r = uRayOrg;
@@ -96,13 +99,13 @@ void main(void) {
             r += ray * d;
             d = gridCityDistance(r);
             // d = floorDistance(r);
-            tries -= 1.0;
+            tries -= (1.0 / maxAttempts);
         }
-        while (d > 0.1 && tries > 0.0);
+        while (d > epsilon && tries > 0.0);
         
-        if (d <= 0.5) {
+        if (d <= epsilon) {
             // const vec3 sky = vec3(0.53, 0.81, 0.92);
-            // outColor = (tries / maxAttempts) * sky;
+            // outColor = tries * sky;
 
             outColor = vec3(gridPattern(r));
         } else {
@@ -136,30 +139,109 @@ float gridPattern(vec3 world) {
     }
 }
 
+float checkerboard(vec3 world) {
+    return mod(dot(floor(world * 16.0), vec3(1.0)), 2.0);
+}
+
 void main(void) {
     const float maxAttempts = 16.0;
+    const float epsilon = 1e-3;
 
     vec3 ray = uRayBaseValue + uRayXContrib * gl_FragCoord.x + uRayYContrib * gl_FragCoord.y;
-    ray = normalize(ray);
+    ray = normalize(ray) * $SCALE;
 
     vec3 o = uRayOrg;
 
-    float tries = maxAttempts;
+    float tries = 1.0;
 
     float d;
     do {
-        d = texture(textureData, o).x - 0.4;
-        o += ray * d;
-        tries -= 1.0;
+        d = texture(textureData, o).x + $BIAS;
+        o = ray * d + o;
+        tries -= 1.0 / maxAttempts;
     }
-    while (d > 1e-4 && tries > 0.0);
+    while (d > epsilon && tries > 0.0);
     
-    if (d <= 1e-4) {
+    if (d <= epsilon) {
         const vec3 sky = vec3(0.53, 0.81, 0.92);
-        outColor = (tries / maxAttempts) * sky;
+        outColor = sky * tries;
 
-        // outColor = vec3(gridPattern(o));
+        outColor = vec3(checkerboard(o));
     } else {
         outColor = vec3(0.0);
     }
 }`;
+
+export function getRayTracer(gl, sceneID) {
+    if (sceneID === 0) {
+        return [rayTracerFsSource];
+    }
+
+    //gl.MIRRORED_REPEAT, gl.REPEAT
+    let sceneSize = [1,1,1];
+    let rMode = gl.REPEAT;
+    let sMode = gl.REPEAT;
+    let tMode = gl.REPEAT;
+    let distFunc;
+
+    // if (sceneID === 1) {
+        sceneSize = [64, 16, 32];
+        distFunc = singleSphereDist;
+    // }
+    // if (sceneID === 2) {
+
+    // }
+    
+    const minDim = Math.min(...sceneSize);
+    const maxDim = Math.min(...sceneSize);
+    const step = 1.0 / maxDim;
+    const scale = "vec3(" + sceneSize.map(x => 255/4 / x).join(",") + ")";
+    // const bias = -4;
+    
+    const shader = sphereTraceFsSource.replace(/\$SCALE/g, scale).replace(/\$BIAS/g, "-4.0/255.0");
+    
+    const data = new Uint8ClampedArray(product(sceneSize));
+    let index = 0;
+    let z = (maxDim - sceneSize[2]) / (2 * maxDim);
+    
+    for (let i = 0; i < sceneSize[2]; ++i) {     
+        let y = (maxDim - sceneSize[1]) / (2 * maxDim);
+
+        for (let j = 0; j < sceneSize[1]; ++j) {
+            let x = (maxDim - sceneSize[0]) / (2 * maxDim);
+            
+            for (let k = 0; k < sceneSize[0]; ++k) {
+                const dist = distFunc(x, y, z);
+                data[index++] = dist * minDim * 4 + 4;
+
+                x += step;
+            }
+
+            y += step;
+        }
+
+        z += step;
+    }
+    
+    // console.log(data);
+    
+    return [shader, {
+        data: data,
+        width: sceneSize[0],
+        height: sceneSize[1],
+        depth: sceneSize[2],
+        R: rMode,
+        S: sMode,
+        T: tMode
+    }];
+}
+
+function product(arr) {
+    return arr.reduce((a, b) => a * b);
+}
+
+/* x, y, and z are normalized to be within a [0,1]*[0,1]*[0,1] box.
+If the box is non-square, then a subset of the [0,1] range is sampled in a given dimension */
+function singleSphereDist(x, y, z) {
+    return Math.hypot(x - 0.5, y - 0.5, z - 0.5) - 0.25;
+}
